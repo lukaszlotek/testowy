@@ -7,6 +7,8 @@ import io.vavr.control.Option;
 public class MessageBoardService {
     private Map<String, Topic> topics;
 
+    private final BoardMessageWriter writer= new BoardMessageWriter("messages.jsons");
+
     MessageBoardService() {
         this.topics = List.of( "java", "ogólny", "dziwne")
                 .map( name -> Topic.create(name))
@@ -19,6 +21,7 @@ public class MessageBoardService {
 
     synchronized Option<Topic> addMessageToTopic(String topicName, Message newMsg) {
         Option<Topic> newTopic = getTopic(topicName).map(topic -> topic.addMessage(newMsg));
+        newTopic.forEach( topic -> writer.write(topic.name, newMsg));
         Option<Map<String, Topic>> newTopics = newTopic.map(topic -> this.topics.put(topicName, topic));
         newTopics.forEach( topics -> this.topics = topics );
         return newTopic;
