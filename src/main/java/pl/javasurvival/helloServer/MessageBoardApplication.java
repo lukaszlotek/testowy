@@ -1,6 +1,7 @@
 package pl.javasurvival.helloServer;
 
 import io.vavr.collection.List;
+import io.vavr.control.Option;
 import org.springframework.http.MediaType;
 import org.springframework.http.server.reactive.HttpHandler;
 import org.springframework.http.server.reactive.ReactorHttpHandlerAdapter;
@@ -14,8 +15,6 @@ import reactor.ipc.netty.http.server.HttpServer;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 
-import java.util.concurrent.atomic.AtomicInteger;
-
 import static org.springframework.web.reactive.function.BodyInserters.fromObject;
 import static org.springframework.web.reactive.function.server.RequestPredicates.GET;
 import static org.springframework.web.reactive.function.server.RequestPredicates.POST;
@@ -23,42 +22,41 @@ import static org.springframework.web.reactive.function.server.RequestPredicates
 import static org.springframework.web.reactive.function.server.RouterFunctions.nest;
 import static org.springframework.web.reactive.function.server.RouterFunctions.route;
 
-public class HelloServerApplication {
-    private List<Message> messages = List.empty();
+public class MessageBoardApplication {
+    private final MessageBoardService service = new MessageBoardService();
 
+    MessageBoardApplication() {
 
-    private HelloServerApplication() {
-        addMessage(new Message("test content", "Zenek Testowy"));
-        addMessage(new Message("bla bla", "Tester"));
     }
 
-
-   private AtomicInteger counter = new AtomicInteger(0);
-
     public static void main(String[] args) {
-        new HelloServerApplication().serve();
-
+        new MessageBoardApplication().serve();
     }
 
     private void serve() {
-        RouterFunction route = nest(path("/api"),
-                route(GET("/time"), renderGetTime())
-                        .andRoute(GET("/messages"), renderMessages())
-                        .andRoute(POST("/messages"), postMessage()));
+        RouterFunction route = prepareRouterFunction();
 
         HttpHandler httpHandler = RouterFunctions.toHttpHandler(route);
         HttpServer server = HttpServer.create("localhost", 8080);
-        server.startAndAwait(new ReactorHttpHandlerAdapter(httpHandler));
+        ReactorHttpHandlerAdapter myReactorHandler = new ReactorHttpHandlerAdapter(httpHandler);
+        server.startAndAwait(myReactorHandler);
+    }
+
+    RouterFunction prepareRouterFunction() {
+        return nest( path("/api"),
+                route(GET("/time"), renderTime())
+                        .andRoute(GET("/messages/{topic}"), renderMessages())
+                        .andRoute(POST("/messages/{topic}"), postMessage()));
     }
 
     private HandlerFunction<ServerResponse> postMessage() {
         return request -> {
             Mono<Message> postedMessage = request.bodyToMono(Message.class);
+
             return postedMessage.flatMap( message -> {
-                addMessage(message);
-                return ServerResponse.ok()
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .body(fromObject(messages.toJavaList()));
+                final String topicName =  request.pathVariable("topic");
+                final Option<Topic> topicOption = service.addMessageToTopic(topicName, message);
+                return messagesOrErrorFromTopic(topicOption);
             });
 
         };
@@ -66,14 +64,22 @@ public class HelloServerApplication {
 
     private HandlerFunction<ServerResponse> renderMessages() {
         return request -> {
+            final String topicName =  request.pathVariable("topic");
+            final Option<Topic> topicOption = service.getTopic(topicName);
+            return messagesOrErrorFromTopic(topicOption);
 
-            return ServerResponse.ok()
-                    .contentType(MediaType.APPLICATION_JSON)
-                    .body(fromObject(getMessages().toJavaList()));
+
         };
     }
 
-    private HandlerFunction<ServerResponse> renderGetTime() {
+    private Mono<ServerResponse> messagesOrErrorFromTopic(Option<Topic> topicOption) {
+        return topicOption.map ( topic -> ServerResponse.ok()
+                .contentType(MediaType.APPLICATION_JSON)
+                .body(fromObject(topic.messages.toJavaList())) )
+                .getOrElse( () -> ServerResponse.notFound().build());
+    }
+
+    private HandlerFunction<ServerResponse> renderTime() {
         return request -> {
             LocalDateTime now = LocalDateTime.now();
             DateTimeFormatter myFormatter = DateTimeFormatter.ofPattern("HH:mm:ss");
@@ -84,12 +90,5 @@ public class HelloServerApplication {
         };
     }
 
-    private synchronized void addMessage(Message message) {
-        messages = messages.append(message);
-    }
-
-    private synchronized List<Message> getMessages() {
-        return messages;
-    }
 
 }
