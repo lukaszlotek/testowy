@@ -2,7 +2,8 @@ package pl.javasurvival.helloServer;
 
 import org.junit.jupiter.api.Test;
 
-import static org.junit.jupiter.api.Assertions.*;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class TopicTest {
 
@@ -17,7 +18,7 @@ class TopicTest {
     public void createdTopicHasCorrectName() {
         Topic created = Topic.create("testowy2");
 
-        assertEquals("testowy2", created.name );
+        assertEquals("testowy2", created.name);
     }
 
     @Test
@@ -33,14 +34,14 @@ class TopicTest {
         Topic created = Topic.create("testowy2");
         Topic newTopic = created.addMessage(new Message("moja", "ja"));
 
-        assertEquals("testowy2", newTopic.name );
+        assertEquals("testowy2", newTopic.name);
     }
 
     @Test
     public void createdAfterAddMessage2HasTwoMessages() {
         Topic newTopic = Topic.create("testowy2")
-        .addMessage(new Message("moja1", "ja"))
-        .addMessage(new Message("moja2", "ja"));
+                .addMessage(new Message("moja1", "ja"))
+                .addMessage(new Message("moja2", "ja"));
 
         assertEquals(2, newTopic.messages.length());
     }
